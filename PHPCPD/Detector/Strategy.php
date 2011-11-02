@@ -45,6 +45,7 @@
  * Abstract base class for strategies to detect code clones.
  *
  * @author    Sebastian Bergmann <sb@sebastian-bergmann.de>
+ * @author    Steffen Zeidler <steff.zeidler@googlemail.com>
  * @copyright 2009-2011 Sebastian Bergmann <sb@sebastian-bergmann.de>
  * @license   http://www.opensource.org/licenses/bsd-license.php  BSD License
  * @version   Release: @package_version@
@@ -53,6 +54,30 @@
  */
 abstract class PHPCPD_Detector_Strategy
 {
+
+    /**
+     * @var array
+     */
+    protected $hashes = array();
+
+    /**
+     * number of tokens, that have to match at least
+     * @var integer
+     */
+    protected $minLines;
+
+    /**
+     * number of tokens, that have to match at least
+     * @var integer
+     */
+    protected $minTokens;
+
+    /**
+     * clone map
+     * @var PHPCPD_CloneMap
+     */
+    protected $cloneMap;
+
     /**
      * @var integer[] List of tokens to ignore
      */
@@ -66,6 +91,7 @@ abstract class PHPCPD_Detector_Strategy
       T_WHITESPACE => TRUE
     );
 
+
     /**
      * Copy & Paste Detection (CPD).
      *
@@ -74,5 +100,43 @@ abstract class PHPCPD_Detector_Strategy
      * @param integer         $minTokens
      * @param PHPCPD_CloneMap $result
      */
-    abstract public function processFile($file, $minLines, $minTokens, PHPCPD_CloneMap $result);
+    abstract public function processFile($file);
+
+
+    /**
+     * Sets minimum lines.
+     *
+     * @param integer $minLines
+     */
+    public function setMinLines($minLines)
+    {
+        $this->minLines = $minLines;
+    }
+
+
+    /**
+     * Sets minimum tokens.
+     *
+     * @param integer $minTokens
+     */
+    public function setMinTokens($minTokens)
+    {
+        $this->minTokens = $minTokens;
+    }
+
+
+    public function setCloneMap($cloneMap)
+    {
+        $this->cloneMap = $cloneMap;
+    }
+
+
+    /**
+     * Clears hash map.
+     */
+    public function clearHashes()
+    {
+        $this->hashes = array();
+    }
+
 }

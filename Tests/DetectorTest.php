@@ -52,6 +52,7 @@ if (!defined('TEST_FILES_PATH')) {
  * Tests for the PHPCPD code analyser.
  *
  * @author    Sebastian Bergmann <sb@sebastian-bergmann.de>
+ * @author    Steffen Zeidler <steff.zeidler@googlemail.com>
  * @copyright 2009-2011 Sebastian Bergmann <sb@sebastian-bergmann.de>
  * @license   http://www.opensource.org/licenses/bsd-license.php  BSD License
  * @version   Release: @package_version@
@@ -60,6 +61,33 @@ if (!defined('TEST_FILES_PATH')) {
  */
 class PHPCPD_DetectorTest extends PHPUnit_Framework_TestCase
 {
+
+    /**
+     * @covers       PHPCPD_Detector::copyPasteDetection
+     */
+    public function testDetectingClonesFromDifferentFiles()
+    {
+        $strategy = new PHPCPD_Detector_Strategy_Default();
+        $detector = new PHPCPD_Detector($strategy);
+
+        $clones = $detector->copyPasteDetection(
+            array(
+                //TEST_FILES_PATH . 'Math.php',
+                TEST_FILES_PATH . 'Dummy.php',
+                TEST_FILES_PATH . 'DummyClone.php'
+            )
+        );
+
+        $clones = $clones->getClones();
+        $this->assertEquals(TEST_FILES_PATH . 'Dummy.php', $clones[0]->aFile);
+        $this->assertEquals(54, $clones[0]->aStartLine);
+        $this->assertEquals(TEST_FILES_PATH . 'DummyClone.php', $clones[0]->bFile);
+        $this->assertEquals(54, $clones[0]->bStartLine);
+        $this->assertEquals(17, $clones[0]->size);
+        $this->assertEquals(52, $clones[0]->tokens);
+    }
+
+
     /**
      * @covers       PHPCPD_Detector::copyPasteDetection
      * @covers       PHPCPD_Clone::getLines

@@ -46,6 +46,7 @@
  *
  * @author    Johann-Peter Hartmann <johann-peter.hartmann@mayflower.de>
  * @author    Sebastian Bergmann <sb@sebastian-bergmann.de>
+ * @author    Steffen Zeidler <steff.zeidler@googlemail.com>
  * @copyright 2009-2011 Sebastian Bergmann <sb@sebastian-bergmann.de>
  * @license   http://www.opensource.org/licenses/bsd-license.php  BSD License
  * @version   Release: @package_version@
@@ -54,128 +55,177 @@
  */
 class PHPCPD_Detector_Strategy_Default extends PHPCPD_Detector_Strategy
 {
+
     /**
-     * Copy & Paste Detection (CPD).
-     *
-     * @param  string          $file
-     * @param  integer         $minLines
-     * @param  integer         $minTokens
-     * @param  PHPCPD_CloneMap $result
-     * @author Johann-Peter Hartmann <johann-peter.hartmann@mayflower.de>
+     * @var array
      */
-    public function processFile($file, $minLines, $minTokens, PHPCPD_CloneMap $result)
+    private $tokens;
+    /**
+     * signature calculated from relevant tokens
+     * @var string
+     */
+    private $signature;
+    /**
+     * signature calculated from relevant anonymized tokens
+     * @var string
+     */
+    private $signatureForSimilarCompare;
+    /**
+     * @var array
+     */
+    private $tokenPositions;
+
+
+    /**
+     * Initialize file processing.
+     */
+    protected function init()
     {
-        $buffer                = file_get_contents($file);
-        $hashes                = array();
-        $currentTokenPositions = array();
-        $currentSignature      = '';
-        $tokens                = token_get_all($buffer);
-        $tokenNr               = 0;
-        $line                  = 1;
+        $this->tokens = array();
+        $this->signature = '';
+        $this->signatureForSimilarCompare = '';
+        $this->tokenPositions = array();
+    }
 
-        $result->setNumLines(
-          $result->getNumLines() + substr_count($buffer, "\n")
+
+    /**
+     * Parses files.
+     *
+     * @param string $file
+     */
+    private function parseFile($file)
+    {
+        $buffer = file_get_contents($file);
+        $this->tokens = token_get_all($buffer);
+
+        $this->cloneMap->setNumLines(
+            $this->cloneMap->getNumLines() + substr_count($buffer, "\n")
         );
+    }
 
-        unset($buffer);
 
-        foreach (array_keys($tokens) as $key) {
-            $token = $tokens[$key];
+    /**
+     * Generates signatures.
+     */
+    private function generateSignatures()
+    {
+        $line = 1;
+        $tokenIndex = 0;
+
+        foreach (array_keys($this->tokens) as $key) {
+            $token = $this->tokens[$key];
 
             if (is_string($token)) {
                 $line += substr_count($token, "\n");
-            } else {
+            }
+            else {
                 if (!isset($this->tokensIgnoreList[$token[0]])) {
-                    $currentTokenPositions[$tokenNr++] = $line;
-
-                    $currentSignature .= chr(
-                      $token[0] & 255) . pack('N*', crc32($token[1])
-                    );
+                    $this->tokenPositions[$tokenIndex++] = $line;
+                    $this->signature .= chr($token[0] & 255) . pack('N*', crc32($token[1]));
                 }
 
                 $line += substr_count($token[1], "\n");
             }
         }
+    }
 
-        $count     = count($currentTokenPositions);
+
+    /**
+     * Copy & Paste Detection (CPD).
+     *
+     * @param  string          $file
+     * @author Johann-Peter Hartmann <johann-peter.hartmann@mayflower.de>
+     */
+    public function processFile($file)
+    {
+        $this->init();
+        $this->parseFile($file);
+        $this->generateSignatures();
+        $this->detectCopyPaste($file);
+    }
+
+
+    /**
+     * Detects copy paste.
+     *
+     * @param string $file
+     */
+    private function detectCopyPaste($file)
+    {
+        $count     = count($this->tokenPositions);
         $firstLine = 0;
         $found     = FALSE;
-        $tokenNr   = 0;
+        $tokenIndex = 0;
 
         if ($count > 0) {
             do {
-                $line = $currentTokenPositions[$tokenNr];
+                $line    = $this->tokenPositions[$tokenIndex];
+                $chunk   = substr($this->signature, $tokenIndex * 5, $this->minTokens * 5);
+                $md5Hash = md5($chunk, TRUE);
+                $hash    = substr($md5Hash, 0, 8);
 
-                $hash = substr(
-                  md5(
-                    substr(
-                      $currentSignature, $tokenNr * 5,
-                      $minTokens * 5
-                    ),
-                    TRUE
-                  ),
-                  0,
-                  8
-                );
-
-                if (isset($hashes[$hash])) {
+                if (isset($this->hashes[$hash])) {
                     $found = TRUE;
 
                     if ($firstLine === 0) {
                         $firstLine  = $line;
                         $firstHash  = $hash;
-                        $firstToken = $tokenNr;
+                        $firstToken = $tokenIndex;
                     }
-                } else {
-                    if ($found) {
-                        $fileA      = $hashes[$firstHash][0];
-                        $firstLineA = $hashes[$firstHash][1];
+                }
+                else {
+                    $this->hashes[$hash] = array($file, $line);
 
-                        if ($line + 1 - $firstLine > $minLines &&
-                            ($fileA != $file ||
-                             $firstLineA != $firstLine)) {
-                            $result->addClone(
-                              new PHPCPD_Clone(
-                                $fileA,
-                                $firstLineA,
-                                $file,
-                                $firstLine,
-                                $line + 1 - $firstLine,
-                                $tokenNr + 1 - $firstToken
-                              )
-                            );
-                        }
+                    if ($found) {
+                        $this->addClone($firstHash, $hash, $firstLine, $firstToken, $tokenIndex);
 
                         $found     = FALSE;
                         $firstLine = 0;
                     }
-
-                    $hashes[$hash] = array($file, $line);
                 }
 
-                $tokenNr++;
-            } while ($tokenNr <= $count - $minTokens + 1);
+                $tokenIndex++;
+            }
+            while ($tokenIndex <= $count - $this->minTokens + 1);
         }
 
         if ($found) {
-            $fileA      = $hashes[$firstHash][0];
-            $firstLineA = $hashes[$firstHash][1];
+            $this->addClone($firstHash, $hash, $firstLine, $firstToken, $tokenIndex);
+        }
 
-            if ($line + 1 - $firstLine > $minLines &&
-                ($fileA != $file || $firstLineA != $firstLine)) {
-                $result->addClone(
-                  new PHPCPD_Clone(
+        $this->hashes = $this->hashes;
+    }
+
+
+    /**
+     * Adds clone if clone size is equal minimum number of lines at least and does not match itself.
+     *
+     * @param string  $firstHash
+     * @param string  $hash
+     * @param integer $firstLine
+     * @param integer $firstToken
+     * @param integer $tokenIndex
+     */
+    private function addClone($firstHash, $hash, $firstLine, $firstToken, $tokenIndex)
+    {
+        $fileA      = $this->hashes[$firstHash][0];
+        $firstLineA = $this->hashes[$firstHash][1];
+        $file       = $this->hashes[$hash][0];
+        $line       = $this->hashes[$hash][1];
+        $lineSize   = $line + 1 - $firstLine;
+        $tokenSize  = $tokenIndex + 1 - $firstToken;
+
+        if ($lineSize > $this->minLines && ($fileA != $file || $firstLineA != $firstLine)) {
+            $clone = new PHPCPD_Clone(
                     $fileA,
                     $firstLineA,
                     $file,
                     $firstLine,
-                    $line + 1 - $firstLine,
-                    $tokenNr + 1 - $firstToken
-                  )
-                );
-            }
-
-            $found = FALSE;
+                    $lineSize,
+                    $tokenSize
+            );
+            $this->cloneMap->addClone($clone);
         }
     }
+
 }

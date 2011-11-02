@@ -59,13 +59,10 @@ class PHPCPD_Detector_Strategy_SaveMemory extends PHPCPD_Detector_Strategy
      * Copy & Paste Detection (CPD).
      *
      * @param  string          $file
-     * @param  integer         $minLines
-     * @param  integer         $minTokens
-     * @param  PHPCPD_CloneMap $result
      * @author Johann-Peter Hartmann <johann-peter.hartmann@mayflower.de>
      * @author Paul Guhl <paul.guhl@mayflower.de>
      */
-    public function processFile($file, $minLines, $minTokens, PHPCPD_CloneMap $result)
+    public function processFile($file)
     {
     }
 }

@@ -46,6 +46,7 @@
  *
  * @author    Johann-Peter Hartmann <johann-peter.hartmann@mayflower.de>
  * @author    Sebastian Bergmann <sb@sebastian-bergmann.de>
+ * @author    Steffen Zeidler <steff.zeidler@googlemail.com>
  * @copyright 2009-2011 Sebastian Bergmann <sb@sebastian-bergmann.de>
  * @license   http://www.opensource.org/licenses/bsd-license.php  BSD License
  * @version   Release: @package_version@
@@ -87,7 +88,10 @@ class PHPCPD_Detector
      */
     public function copyPasteDetection($files, $minLines = 5, $minTokens = 70)
     {
-        $result = new PHPCPD_CloneMap;
+        $cloneMap = new PHPCPD_CloneMap;
+        $this->strategy->setMinLines($minLines);
+        $this->strategy->setMinTokens($minTokens);
+        $this->strategy->setCloneMap($cloneMap);
 
         if ($this->output !== NULL) {
             $bar = new ezcConsoleProgressbar($this->output, count($files));
@@ -95,7 +99,7 @@ class PHPCPD_Detector
         }
 
         foreach ($files as $file) {
-            $this->strategy->processFile($file, $minLines, $minTokens, $result);
+            $this->strategy->processFile($file);
 
             if ($this->output !== NULL) {
                 $bar->advance();
@@ -106,6 +110,6 @@ class PHPCPD_Detector
             print "\n\n";
         }
 
-        return $result;
+        return $cloneMap;
     }
 }
